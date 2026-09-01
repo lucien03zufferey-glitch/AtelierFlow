@@ -169,6 +169,12 @@ def dashboard():
     return render_template("dashboard.html", projects=projects, tasks=tasks, stats=stats)
 
 
+@app.get("/projects")
+@login_required
+def projects_list():
+    return redirect(url_for("dashboard"))
+
+
 @app.post("/projects")
 @login_required
 def create_project():
