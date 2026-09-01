@@ -1,0 +1,2 @@
+{% extends 'base.html' %}{% block title %}Équipe · AtelierFlow{% endblock %}{% block content %}<div class="page-head"><div><span class="eyebrow">COLLABORATION</span><h1>L’équipe</h1><p>Les personnes qui font avancer les projets.</p></div></div><section class="team-grid">{% for user in users %}<article class="team-card"><span class="avatar big" style="--avatar:{{ user.color }}">{{ user.initials }}</span><h3>{{ user.name }}</h3><p>{{ user.role }}</p><div><strong>{{ user.open_tasks }}</strong><small>tâches ouvertes</small></div></article>{% endfor %}</section>{% endblock %}
+
