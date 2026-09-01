@@ -1,4 +1,6 @@
-document.querySelector('#menuButton')?.addEventListener('click',()=>document.querySelector('.sidebar')?.classList.toggle('open'));
+const menuButton=document.querySelector('#menuButton');
+menuButton?.addEventListener('click',()=>{const sidebar=document.querySelector('.sidebar');sidebar?.classList.toggle('open');menuButton.setAttribute('aria-expanded',String(sidebar?.classList.contains('open')))});
+document.querySelectorAll('.sidebar nav a').forEach(a=>a.addEventListener('click',()=>document.querySelector('.sidebar')?.classList.remove('open')));
 document.querySelectorAll('[data-modal-open]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.modalOpen)?.showModal()));
 document.querySelectorAll('[data-modal-close]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog')?.close()));
 document.querySelectorAll('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)d.close()}));
@@ -24,8 +26,7 @@ if(messages&&messageForm){
   messageForm.addEventListener('submit',async e=>{
     e.preventDefault();const input=document.querySelector('#messageInput');const body=input.value.trim();if(!body)return;
     const button=messageForm.querySelector('button');button.disabled=true;
-    try{const r=await fetch(`/api/projects/${projectId}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body})});if(r.ok){input.value='';await refreshMessages(true)}}finally{button.disabled=false;input.focus()}
+    try{const r=await fetch(`/api/projects/${projectId}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body})});if(r.ok){input.value='';await refreshMessages(true)}else{alert('Le message n’a pas pu être envoyé. Réessayez.')}}catch(_){alert('Connexion interrompue. Réessayez.')}finally{button.disabled=false;input.focus()}
   });
   refreshMessages(true);setInterval(refreshMessages,4000);
 }
-
