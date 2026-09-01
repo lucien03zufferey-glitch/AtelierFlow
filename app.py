@@ -20,6 +20,9 @@ app = Flask(__name__)
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "atelierflow-change-me-in-production"),
     MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("RENDER") == "true",
 )
 
 INITIAL_USERS = [
@@ -29,6 +32,8 @@ INITIAL_USERS = [
     ("David", "333", "Menuisier", "DA", "#10b981"),
 ]
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "pdf", "doc", "docx", "xls", "xlsx", "txt", "zip"}
+PROJECT_STATUSES = {"Préparation", "En cours", "En attente", "Terminé"}
+TASK_PRIORITIES = {"Normale", "Haute", "Urgente"}
 
 
 def db():
@@ -211,8 +216,13 @@ def project(project_id):
 @login_required
 def update_project(project_id):
     progress = max(0, min(100, request.form.get("progress", 0, type=int)))
+    status = request.form.get("status", "Préparation")
+    if status not in PROJECT_STATUSES:
+        abort(400)
     with db() as conn:
-        conn.execute("UPDATE projects SET status=?,progress=?,due_date=? WHERE id=?", (request.form.get("status"), progress, request.form.get("due_date"), project_id))
+        if not conn.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            abort(404)
+        conn.execute("UPDATE projects SET status=?,progress=?,due_date=? WHERE id=?", (status, progress, request.form.get("due_date"), project_id))
     flash("Projet mis à jour.", "success")
     return redirect(url_for("project", project_id=project_id))
 
@@ -221,9 +231,14 @@ def update_project(project_id):
 @login_required
 def add_task(project_id):
     title = request.form.get("title", "").strip()
+    priority = request.form.get("priority", "Normale")
+    if priority not in TASK_PRIORITIES:
+        priority = "Normale"
     if title:
         with db() as conn:
-            conn.execute("INSERT INTO tasks(project_id,title,assignee_id,priority,due_date,created_at) VALUES(?,?,?,?,?,?)", (project_id, title, request.form.get("assignee_id") or None, request.form.get("priority"), request.form.get("due_date"), now()))
+            if not conn.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+                abort(404)
+            conn.execute("INSERT INTO tasks(project_id,title,assignee_id,priority,due_date,created_at) VALUES(?,?,?,?,?,?)", (project_id, title, request.form.get("assignee_id") or None, priority, request.form.get("due_date"), now()))
     return redirect(url_for("project", project_id=project_id) + "#tasks")
 
 
@@ -243,6 +258,8 @@ def add_report(project_id):
     title, body = request.form.get("title", "").strip(), request.form.get("body", "").strip()
     if title and body:
         with db() as conn:
+            if not conn.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+                abort(404)
             conn.execute("INSERT INTO reports(project_id,author_id,title,body,hours,created_at) VALUES(?,?,?,?,?,?)", (project_id, session["user_id"], title, body, request.form.get("hours", 0, type=float), now()))
     return redirect(url_for("project", project_id=project_id) + "#reports")
 
@@ -250,6 +267,9 @@ def add_report(project_id):
 @app.route("/api/projects/<int:project_id>/messages", methods=["GET", "POST"])
 @login_required
 def project_messages(project_id):
+    with db() as conn:
+        if not conn.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            return jsonify({"error": "Projet introuvable"}), 404
     if request.method == "POST":
         payload = request.get_json(silent=True) or {}
         body = str(payload.get("body", "")).strip()
@@ -265,6 +285,9 @@ def project_messages(project_id):
 @app.post("/projects/<int:project_id>/files")
 @login_required
 def upload_file(project_id):
+    with db() as conn:
+        if not conn.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            abort(404)
     uploaded = request.files.get("file")
     if not uploaded or not uploaded.filename:
         flash("Choisissez un fichier.", "error")
@@ -303,6 +326,16 @@ def team():
 def too_large(_):
     flash("Le fichier dépasse la limite de 20 Mo.", "error")
     return redirect(request.referrer or url_for("dashboard"))
+
+
+@app.errorhandler(404)
+def not_found(_):
+    return render_template("error.html", code=404, message="Cette page ou ce projet n’existe pas."), 404
+
+
+@app.errorhandler(400)
+def bad_request(_):
+    return render_template("error.html", code=400, message="La demande envoyée n’est pas valide."), 400
 
 
 if __name__ == "__main__":
